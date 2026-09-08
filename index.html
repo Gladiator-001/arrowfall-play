@@ -22,10 +22,19 @@
       #fill { width: 0; height: 100%; background: #E8B44A; transition: width 0.2s; }
       #turn { display: none; }
       @media (orientation: portrait) { #turn { display: block; } #tip { display: none; } }
+      #turn-veil { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
+                   background: #12285A; color: #E6E2D8; z-index: 20; text-align: center; padding: 24px; }
+      #turn-veil h2 { font-family: Georgia, "Times New Roman", serif; color: #F2C230; font-size: 28px; margin: 0 0 8px; }
+      #turn-veil p { margin: 4px 0; opacity: 0.85; font-size: 16px; }
+      body.portrait #turn-veil { display: flex; }
     </style>
   </head>
   <body>
     <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <div id="turn-veil">
+      <h2>Tourne ton téléphone</h2>
+      <p>ARROWFALL se joue en paysage.</p>
+    </div>
     <div id="veil">
       <h1>ARROWFALL</h1>
       <p id="status">Chargement…</p>
@@ -59,6 +68,20 @@
       }).then(function (instance) {
         veil.style.display = "none";
         window.unity = instance;
+
+        // Landscape only. In portrait the veil covers the game and the world waits;
+        // where the browser allows it, the orientation is locked outright.
+        function orient() {
+          var portrait = window.innerHeight > window.innerWidth;
+          document.body.classList.toggle("portrait", portrait);
+          instance.SendMessage("BattleBootstrap", "PagePortrait", portrait ? "1" : "0");
+        }
+        window.addEventListener("resize", orient);
+        window.addEventListener("orientationchange", function () { setTimeout(orient, 200); });
+        setTimeout(orient, 300);
+        try {
+          if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(function () {});
+        } catch (e) {}
 
         // ?level=n jumps straight into that battle, whatever the save says: the
         // founder's way to look at a land before he has earned it.
