@@ -56,8 +56,16 @@
       }, function (progress) {
         fill.style.width = Math.round(progress * 100) + "%";
         if (progress >= 1) status.textContent = "Prêt.";
-      }).then(function () {
+      }).then(function (instance) {
         veil.style.display = "none";
+        window.unity = instance;
+
+        // ?level=n jumps straight into that battle, whatever the save says: the
+        // founder's way to look at a land before he has earned it.
+        var level = new URLSearchParams(location.search).get("level");
+        if (level) setTimeout(function () {
+          instance.SendMessage("BattleBootstrap", "DebugStartLevel", level);
+        }, 1200);
       }).catch(function (message) {
         status.textContent = "Erreur : " + message;
       });
