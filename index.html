@@ -85,10 +85,18 @@
 
         // ?level=n jumps straight into that battle, whatever the save says: the
         // founder's way to look at a land before he has earned it.
-        var level = new URLSearchParams(location.search).get("level");
+        var query = new URLSearchParams(location.search);
+        var level = query.get("level");
         if (level) setTimeout(function () {
           instance.SendMessage("BattleBootstrap", "DebugStartLevel", level);
         }, 1200);
+
+        // ?end=win or ?end=lose breaks the right wall and raises the end banner, so
+        // those two screens can be looked at without playing a whole assault.
+        var end = query.get("end");
+        if (end) setTimeout(function () {
+          instance.SendMessage("BattleBootstrap", "DebugEnd", end);
+        }, level ? 2600 : 1600);
       }).catch(function (message) {
         status.textContent = "Erreur : " + message;
       });
