@@ -91,6 +91,13 @@
           instance.SendMessage("BattleBootstrap", "DebugStartLevel", level);
         }, 1200);
 
+        // ?page=hero opens that page of the hub, so every screen of the game has an
+        // address of its own.
+        var page = query.get("page");
+        if (page) setTimeout(function () {
+          instance.SendMessage("BattleBootstrap", "DebugShowPage", page);
+        }, level ? 2400 : 1400);
+
         // ?end=win or ?end=lose breaks the right wall and raises the end banner, so
         // those two screens can be looked at without playing a whole assault.
         var end = query.get("end");
