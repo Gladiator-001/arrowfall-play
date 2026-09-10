@@ -2,65 +2,184 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8">
-    <title>ARROWFALL</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Arrowfall</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="ARROWFALL">
+    <meta name="apple-mobile-web-app-title" content="Arrowfall">
     <meta name="theme-color" content="#141E2C">
     <style>
       html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #141E2C; overflow: hidden;
                    overscroll-behavior: none; -webkit-user-select: none; user-select: none;
                    -webkit-touch-callout: none; touch-action: none; font-family: -apple-system, system-ui, sans-serif; }
-      #unity-canvas { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; display: block; background: #141E2C; touch-action: none; }
+
+      /* The stage is the game's own landscape rectangle. On a phone held upright it
+         is turned a quarter and made as wide as the phone is tall, so the game is
+         landscape whatever the hand does - no veil, no "turn your phone". */
+      #stage { position: fixed; left: 0; top: 0; transform-origin: 0 0; }
+      #unity-canvas { display: block; width: 100%; height: 100%; background: #141E2C; touch-action: none; }
+
       #veil { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
               background: #141E2C; color: #E6E2D8; z-index: 10; text-align: center; padding: 24px; }
       #veil h1 { font-family: Georgia, "Times New Roman", serif; letter-spacing: 0.12em; color: #E8B44A; font-size: 34px; margin: 0 0 12px; font-weight: 700; }
       #veil p { margin: 6px 0; opacity: 0.85; font-size: 15px; }
       #bar { width: 240px; height: 6px; background: #2A3242; border-radius: 3px; overflow: hidden; margin-top: 14px; }
       #fill { width: 0; height: 100%; background: #E8B44A; transition: width 0.2s; }
-      #turn { display: none; }
-      @media (orientation: portrait) { #turn { display: block; } #tip { display: none; } }
-      #turn-veil { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
-                   background: #12285A; color: #E6E2D8; z-index: 20; text-align: center; padding: 24px; }
-      #turn-veil h2 { font-family: Georgia, "Times New Roman", serif; color: #F2C230; font-size: 28px; margin: 0 0 8px; }
-      #turn-veil p { margin: 4px 0; opacity: 0.85; font-size: 16px; }
-      body.portrait #turn-veil { display: flex; }
     </style>
   </head>
   <body>
-    <canvas id="unity-canvas" tabindex="-1"></canvas>
-    <div id="turn-veil">
-      <h2>Tourne ton téléphone</h2>
-      <p>ARROWFALL se joue en paysage.</p>
-    </div>
+    <div id="stage"><canvas id="unity-canvas" tabindex="-1"></canvas></div>
     <div id="veil">
-      <h1>ARROWFALL</h1>
+      <h1>Arrowfall</h1>
       <p id="status">Chargement…</p>
       <div id="bar"><div id="fill"></div></div>
-      <p id="turn">Tourne le téléphone en paysage.</p>
       <p id="tip">Tire en glissant le doigt vers l&#39;arrière, comme une corde.</p>
     </div>
     <script src="Build/WebGL.loader.js"></script>
     <script>
       var canvas = document.querySelector("#unity-canvas");
+      var stage = document.querySelector("#stage");
       var veil = document.querySelector("#veil");
       var status = document.querySelector("#status");
       var fill = document.querySelector("#fill");
 
+      // ---------------------------------------------------------------- landscape
+      //
+      // A phone game is landscape, full stop, and the player should never be asked
+      // to turn anything. Two mechanisms, in order:
+      //
+      //   1. Full screen plus an orientation lock, on the first touch. Where the
+      //      browser allows it (Android) the SYSTEM turns the page and the game is
+      //      landscape natively - input, safe areas and all.
+      //   2. Where it does not (every iPhone: no Fullscreen API, no orientation
+      //      lock), the stage is turned a quarter by hand.
+      //
+      // Turning it by hand costs one thing: Unity reads a pointer as
+      // `event.clientX - canvas.getBoundingClientRect().left`, and both halves of
+      // that are wrong once the element is rotated. So the canvas is taught to
+      // report the game's own rectangle, and every pointer is caught on the way
+      // down and rewritten into it. Without this the game renders correctly and
+      // answers the wrong finger, which is worse than not turning at all.
+      var turned = false;
+      var logical = { w: window.innerWidth, h: window.innerHeight };
+
+      var nativeRect = canvas.getBoundingClientRect.bind(canvas);
+      canvas.getBoundingClientRect = function () {
+        if (!turned) return nativeRect();
+        return { left: 0, top: 0, x: 0, y: 0, right: logical.w, bottom: logical.h,
+                 width: logical.w, height: logical.h };
+      };
+
+      function layout() {
+        var vw = window.innerWidth, vh = window.innerHeight;
+        turned = vh > vw;
+        logical.w = turned ? vh : vw;
+        logical.h = turned ? vw : vh;
+        stage.style.width = logical.w + "px";
+        stage.style.height = logical.h + "px";
+        // rotate(90deg) about the top-left corner, then lifted by its own height so
+        // it lands back on screen: the game's top edge ends up along the phone's
+        // right side, which is where it belongs when the phone is turned to the left.
+        stage.style.transform = turned ? "rotate(90deg) translateY(-100%)" : "none";
+        if (window.unity) window.unity.SendMessage("BattleBootstrap", "PagePortrait", "0");
+      }
+
+      // The phone's point, in the game's rectangle. Derived from the transform above:
+      // screen (x, y) = (vw - ly, lx), so lx = y and ly = vw - x.
+      function toStage(x, y) {
+        return turned ? { x: y, y: window.innerWidth - x } : { x: x, y: y };
+      }
+
+      function rewrite(target, x, y) {
+        var p = toStage(x, y);
+        try {
+          Object.defineProperty(target, "clientX", { get: function () { return p.x; }, configurable: true });
+          Object.defineProperty(target, "clientY", { get: function () { return p.y; }, configurable: true });
+          Object.defineProperty(target, "pageX", { get: function () { return p.x; }, configurable: true });
+          Object.defineProperty(target, "pageY", { get: function () { return p.y; }, configurable: true });
+        } catch (e) {}
+      }
+
+      // Capture on the window, so this runs before anything Unity registered on the
+      // canvas or the document reads the numbers.
+      ["pointerdown", "pointerup", "pointermove", "pointercancel",
+       "mousedown", "mouseup", "mousemove", "wheel",
+       "touchstart", "touchmove", "touchend", "touchcancel"].forEach(function (type) {
+        window.addEventListener(type, function (e) {
+          if (!turned) return;
+          if (e.touches || e.changedTouches) {
+            var lists = [e.touches, e.changedTouches, e.targetTouches];
+            for (var l = 0; l < lists.length; l++) {
+              if (!lists[l]) continue;
+              for (var i = 0; i < lists[l].length; i++) {
+                var t = lists[l][i];
+                if (t.__turned) continue;
+                t.__turned = true;
+                rewrite(t, t.clientX, t.clientY);
+              }
+            }
+          }
+          if (typeof e.clientX === "number") rewrite(e, e.clientX, e.clientY);
+        }, { capture: true, passive: false });
+      });
+
+      window.addEventListener("resize", layout);
+      window.addEventListener("orientationchange", function () { setTimeout(layout, 120); });
+      layout();
+
+      // Where the system can do it properly, let it: full screen turns the page for
+      // real and mechanism 2 switches itself off at the next layout.
+      var asked = false;
+      function claimLandscape() {
+        if (asked) return;
+        asked = true;
+        var root = document.documentElement;
+        var full = root.requestFullscreen || root.webkitRequestFullscreen;
+        try {
+          var promise = full && full.call(root, { navigationUI: "hide" });
+          if (promise && promise.then) promise.then(lock, function () {});
+          else lock();
+        } catch (e) { lock(); }
+      }
+      function lock() {
+        try {
+          if (screen.orientation && screen.orientation.lock)
+            screen.orientation.lock("landscape").then(function () { setTimeout(layout, 120); },
+                                                      function () {});
+        } catch (e) {}
+      }
+      window.addEventListener("pointerdown", claimLandscape, { once: true });
+      window.addEventListener("touchstart", claimLandscape, { once: true });
+
       // Two device pixels per CSS pixel at most: crisp on a phone, kind to its battery.
       var dpr = Math.min(window.devicePixelRatio || 1, 2);
 
+      // Reading the canvas back needs the drawing buffer kept.
+      //
+      // WebGL throws the buffer away the moment the page is composited unless it
+      // is told not to, so canvas.toDataURL() returns a blank picture except in
+      // the frames where the read happens to beat the compositor. That is what
+      // "half the shots came back mid-transition" was: not a timing problem in the
+      // walk, a cleared buffer. It also made the whole review loop depend on which
+      // browser was driving it.
+      //
+      // It is not switched on for players. Keeping the buffer costs a copy every
+      // frame on a phone, for something only the review loop ever reads, so it is
+      // opted into by the same query string that asks for pictures.
+      var q0 = new URLSearchParams(location.search);
+      var shooting = q0.has("tour") || q0.get("shots") === "1";
+
       createUnityInstance(canvas, {
         arguments: [],
+        webglContextAttributes: { preserveDrawingBuffer: shooting },
         dataUrl: "Build/WebGL.data.unityweb",
         frameworkUrl: "Build/WebGL.framework.js.unityweb",
         codeUrl: "Build/WebGL.wasm.unityweb",
         streamingAssetsUrl: "StreamingAssets",
         companyName: "Ethan Koskas",
         productName: "Arrowfall",
-        productVersion: "2026.09.09.1953",
+        productVersion: "2026.09.11.0105",
         devicePixelRatio: dpr
       }, function (progress) {
         fill.style.width = Math.round(progress * 100) + "%";
@@ -68,20 +187,7 @@
       }).then(function (instance) {
         veil.style.display = "none";
         window.unity = instance;
-
-        // Landscape only. In portrait the veil covers the game and the world waits;
-        // where the browser allows it, the orientation is locked outright.
-        function orient() {
-          var portrait = window.innerHeight > window.innerWidth;
-          document.body.classList.toggle("portrait", portrait);
-          instance.SendMessage("BattleBootstrap", "PagePortrait", portrait ? "1" : "0");
-        }
-        window.addEventListener("resize", orient);
-        window.addEventListener("orientationchange", function () { setTimeout(orient, 200); });
-        setTimeout(orient, 300);
-        try {
-          if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(function () {});
-        } catch (e) {}
+        layout();
 
         // ?level=n jumps straight into that battle, whatever the save says: the
         // founder's way to look at a land before he has earned it.
@@ -104,9 +210,37 @@
         if (end) setTimeout(function () {
           instance.SendMessage("BattleBootstrap", "DebugEnd", end);
         }, level ? 2600 : 1600);
+        // ?tour=home,hero,army,... walks the hub and puts a picture of every page
+        // on disk, through Tools/serve.py. One page load, no clicking: the review
+        // loop used to be a browser being told to hit a button it could not always
+        // find, and half the shots came back mid-transition.
+        var tour = query.get("tour");
+        if (tour) walk(instance, tour.split(","));
       }).catch(function (message) {
         status.textContent = "Erreur : " + message;
       });
+
+      function walk(instance, pages) {
+        var i = 0;
+        function step() {
+          if (i >= pages.length) { status.textContent = "Tour fini."; veil.style.display = "flex"; return; }
+          var page = pages[i++];
+          if (page.indexOf("end:") === 0) instance.SendMessage("BattleBootstrap", "DebugEnd", page.slice(4));
+          else if (page.indexOf("level:") === 0) instance.SendMessage("BattleBootstrap", "DebugStartLevel", page.slice(6));
+          else instance.SendMessage("BattleBootstrap", "DebugShowPage", page);
+          setTimeout(function () {
+            var name = page.replace(":", "-");
+            try {
+              var url = canvas.toDataURL("image/png");
+              var post = new XMLHttpRequest();
+              post.open("POST", "/__shot/" + name + ".png", true);
+              post.send(url);
+            } catch (e) {}
+            setTimeout(step, 260);
+          }, 1400);
+        }
+        setTimeout(step, 1600);
+      }
 
       // No pinch zoom, no double-tap zoom: the whole screen is the bow.
       document.addEventListener("gesturestart", function (e) { e.preventDefault(); }, { passive: false });
