@@ -179,7 +179,7 @@
         streamingAssetsUrl: "StreamingAssets",
         companyName: "Ethan Koskas",
         productName: "Arrowfall",
-        productVersion: "2026.09.11.0105",
+        productVersion: "2026.09.11.1819",
         devicePixelRatio: dpr
       }, function (progress) {
         fill.style.width = Math.round(progress * 100) + "%";
@@ -209,6 +209,14 @@
         var end = query.get("end");
         if (end) setTimeout(function () {
           instance.SendMessage("BattleBootstrap", "DebugEnd", end);
+        }, level ? 2600 : 1600);
+
+        // ?parade=1 stands one of every kind of man on the field, both armies, and
+        // stops them a step later: every unit's art judged at a glance, without the
+        // fourteen battles it takes to meet them all in play.
+        var parade = query.get("parade");
+        if (parade) setTimeout(function () {
+          instance.SendMessage("BattleBootstrap", "DebugParade", parade);
         }, level ? 2600 : 1600);
         // ?tour=home,hero,army,... walks the hub and puts a picture of every page
         // on disk, through Tools/serve.py. One page load, no clicking: the review
