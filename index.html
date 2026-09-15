@@ -36,6 +36,42 @@
       <div id="bar"><div id="fill"></div></div>
       <p id="tip">Tire en glissant le doigt vers l&#39;arrière, comme une corde.</p>
     </div>
+    <script>
+      // ------------------------------------------------------------------- sound
+      //
+      // An iPhone mutes the Web Audio of a page while its silent switch is on, and
+      // wakes a page's audio only from inside a touch. The founder heard nothing
+      // ("pas de son"). So every audio context the game makes is remembered and
+      // resumed on each touch until it runs, and the page asks to be treated as
+      // media playback (Safari 17's audio session), which the switch does not mute.
+      (function () {
+        var contexts = [];
+        var Native = window.AudioContext || window.webkitAudioContext;
+        if (Native) {
+          var Remembered = function (options) {
+            var context = options === undefined ? new Native() : new Native(options);
+            contexts.push(context);
+            return context;
+          };
+          Remembered.prototype = Native.prototype;
+          window.AudioContext = Remembered;
+          if (window.webkitAudioContext) window.webkitAudioContext = Remembered;
+        }
+        function playback() {
+          try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+        }
+        function wake() {
+          playback();
+          for (var i = 0; i < contexts.length; i++) {
+            try { if (contexts[i].state !== "running" && contexts[i].resume) contexts[i].resume(); } catch (e) {}
+          }
+        }
+        playback();
+        ["touchend", "pointerup", "mousedown", "keydown"].forEach(function (type) {
+          window.addEventListener(type, wake, { capture: true, passive: true });
+        });
+      })();
+    </script>
     <script src="Build/WebGL.loader.js"></script>
     <script>
       var canvas = document.querySelector("#unity-canvas");
@@ -179,7 +215,7 @@
         streamingAssetsUrl: "StreamingAssets",
         companyName: "Ethan Koskas",
         productName: "Arrowfall",
-        productVersion: "2026.09.15.1500",
+        productVersion: "2026.09.15.1651",
         devicePixelRatio: dpr
       }, function (progress) {
         fill.style.width = Math.round(progress * 100) + "%";
