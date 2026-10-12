@@ -15,3 +15,13 @@ id_ed25519
 *service-account*.json
 secrets.yml
 secrets.yaml
+
+# ─── Ajouté par l'audit de sécurité : ce site est public ───
+*.keystore
+*.key
+*.aab
+*.apk
+*.log
+*.symbols.zip
+google-services*.json
+GoogleService-Info.plist
