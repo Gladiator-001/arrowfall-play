@@ -2,6 +2,10 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8">
+    <!-- What this page may load: only its own files (and the blobs and the
+         WebAssembly the Unity loader makes from them). No other site's script can
+         run here, and nothing is sent anywhere but back to this site. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' blob: data:; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
     <title>Arrowfall</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -316,7 +320,12 @@
       // It is not switched on for players. Keeping the buffer costs a copy every
       // frame on a phone, for something only the review loop ever reads, so it is
       // opted into by the same query string that asks for pictures.
-      var q0 = new URLSearchParams(location.search);
+      // The review addresses (?level, ?page, ?end, ?parade, ?tour, ?shots) open
+      // locked lands and write rewards into the save: they are the founder's
+      // tools, so they answer only on his own machine (Tools/serve.py), never on
+      // the public site, where a shared link would apply them to whoever opened it.
+      var reviewing = location.hostname === "127.0.0.1" || location.hostname === "localhost";
+      var q0 = new URLSearchParams(reviewing ? location.search : "");
       var shooting = q0.has("tour") || q0.get("shots") === "1";
 
       createUnityInstance(canvas, {
@@ -328,7 +337,7 @@
         streamingAssetsUrl: "StreamingAssets",
         companyName: "Ethan Koskas",
         productName: "Arrowfall",
-        productVersion: "2026.09.15.1902",
+        productVersion: "2026.10.13.0014",
         devicePixelRatio: dpr
       }, function (progress) {
         fill.style.width = Math.round(progress * 100) + "%";
@@ -342,7 +351,7 @@
 
         // ?level=n jumps straight into that battle, whatever the save says: the
         // founder's way to look at a land before he has earned it.
-        var query = new URLSearchParams(location.search);
+        var query = q0;
         var level = query.get("level");
         if (level) setTimeout(function () {
           instance.SendMessage("BattleBootstrap", "DebugStartLevel", level);
